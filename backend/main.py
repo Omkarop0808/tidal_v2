@@ -7,6 +7,8 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+load_dotenv()
+
 from google import genai
 from google.genai import types
 
@@ -375,8 +377,8 @@ async def report_observation(file: UploadFile = File(...)):
         "composition": gemini_result.get("composition", "Mixed Polymers"),
         "estimated_weight_kg": gemini_result.get("estimated_weight_kg", 24),
         "category": gemini_result.get("category", "Upcyclable"),
-        "item_count": vision_result.get("item_count", 0),
-        "bounding_boxes": vision_result.get("bounding_boxes", [])
+        "item_count": vision_result.get("item_count", 0) or len(gemini_result.get("bounding_boxes", [])),
+        "bounding_boxes": vision_result.get("bounding_boxes") or gemini_result.get("bounding_boxes", [])
     }
     
     matched_upcycler = gemini_result.get("matched_upcycler", "Lucro Plastecycle Pvt Ltd")

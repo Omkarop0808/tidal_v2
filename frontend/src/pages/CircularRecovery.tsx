@@ -161,9 +161,12 @@ export default function CircularRecovery() {
                     </button>
                   </div>
 
-                  <div className={`relative w-full h-full bg-[url('https://images.unsplash.com/photo-1621451537084-482c73073e0f?auto=format&fit=crop&q=80&w=1000')] bg-cover bg-center transition-none ${
-                    isClaheActive ? 'filter grayscale contrast-125' : 'opacity-50 grayscale'
-                  }`}>
+                  <div 
+                    className={`relative w-full h-full bg-cover bg-center transition-none ${
+                      isClaheActive ? 'filter grayscale contrast-125' : 'opacity-50 grayscale'
+                    }`}
+                    style={{ backgroundImage: "url('/drone-debris.jpg')" }}
+                  >
                     <div className="absolute border-2 border-[#ff4d00] bg-[#ff4d00]/20 top-[38%] left-[28%] w-[20%] h-[22%] flex items-start justify-start p-2">
                       <span className="bg-[#ff4d00] text-black font-mono text-[10px] uppercase font-bold tracking-widest px-2 py-1">
                         PET (88%)

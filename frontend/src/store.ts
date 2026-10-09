@@ -93,6 +93,9 @@ export interface SimState {
   setPlaybackSpeed: (speed: number) => void;
   togglePlay: () => void;
   setIsPlaying: (isPlaying: boolean) => void;
+  // Circular Economy
+  spotRate: number;
+  setSpotRate: (rate: number) => void;
 }
 
 export const useSim = create<SimState>((set) => ({
@@ -162,6 +165,10 @@ export const useSim = create<SimState>((set) => ({
   setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
   setIsPlaying: (isPlaying) => set({ isPlaying }),
+  
+  // Circular
+  spotRate: 35.0,
+  setSpotRate: (spotRate) => set({ spotRate }),
 }));
 
 export default useSim;

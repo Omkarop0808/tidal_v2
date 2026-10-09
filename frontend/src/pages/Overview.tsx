@@ -51,6 +51,7 @@ const Overview = () => {
   const [selectedBeach, setSelectedBeach] = useState<any>(null);
   const activeMission = useSim(state => state.activeMission);
   const setActiveMissionZone = useSim(state => state.setActiveMissionZone);
+  const spotRate = useSim(state => state.spotRate);
 
   const { data: liveData, isConnected } = useLiveFeed('ws://localhost:8000/ws/live');
 
@@ -301,29 +302,34 @@ const Overview = () => {
             </div>
           </motion.div>
 
-          {/* Bento Card 4: Circular */}
+          {/* Bento Card 4: Circular / Plastics Exchange */}
           <motion.div 
             custom={5} initial="hidden" whileInView="visible" viewport={{ once: true }} variants={fadeUp}
-            className="col-span-12 lg:col-span-8 p-6 sm:p-8 bg-[#050505] flex flex-col md:flex-row justify-between items-start md:items-center gap-8"
+            className="col-span-12 lg:col-span-8 p-6 sm:p-8 bg-[#050505] flex flex-col md:flex-row justify-between items-start md:items-center gap-8 border-l-4 border-l-emerald-500"
           >
             <div className="flex flex-col">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-[#a3a3a3] font-bold mb-2">Circular Economy Feasibility</span>
-              <h3 className="text-2xl font-headline font-black uppercase text-white">Recovery Efficiency</h3>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-500 font-bold mb-2">The Plastics Exchange</span>
+              <h3 className="text-2xl font-headline font-black uppercase text-white">Live Valuation</h3>
             </div>
-            <div className="flex-1 w-full max-w-md">
-              <div className="flex justify-between font-mono text-[10px] font-bold uppercase tracking-widest mb-2">
-                <span className="text-[#a3a3a3]">AI INTERCEPTION</span>
-                <span className="text-white">{data ? data.recovery_potential : '78'}%</span>
+            <div className="flex-1 w-full max-w-md flex gap-8">
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">Est. Recoverable (KG)</span>
+                <span className="text-3xl font-headline font-black text-white">
+                  {predictedDebris !== '--' ? (parseFloat(predictedDebris as string) * 1000 * (data ? data.recovery_potential / 100 : 0.78)).toLocaleString(undefined, {maximumFractionDigits: 0}) : '--'} KG
+                </span>
               </div>
-              <div className="w-full h-1 bg-[#333333] relative">
-                <div className="absolute top-0 left-0 h-full bg-white" style={{ width: `${data ? data.recovery_potential : 78}%` }}></div>
+              <div className="flex flex-col gap-1">
+                <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">PET Value (₹{spotRate}/KG)</span>
+                <span className="text-3xl font-headline font-black text-emerald-400">
+                  ₹{predictedDebris !== '--' ? (parseFloat(predictedDebris as string) * 1000 * (data ? data.recovery_potential / 100 : 0.78) * spotRate).toLocaleString(undefined, {maximumFractionDigits: 0}) : '--'}
+                </span>
               </div>
             </div>
             <Link 
               to="/circular-recovery"
-              className="px-6 py-4 border-2 border-[#333333] hover:border-white text-white font-headline font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-4 transition-none"
+              className="px-6 py-4 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 hover:text-black font-headline font-bold uppercase tracking-widest text-sm flex items-center justify-center gap-4 transition-colors"
             >
-              <span>VIEW VISION FEEDS</span>
+              <span>OPEN EXCHANGE</span>
               <ArrowRight className="w-4 h-4" />
             </Link>
           </motion.div>
