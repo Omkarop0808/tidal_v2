@@ -39,12 +39,17 @@ app.add_middleware(
 
 # --- REQUEST / RESPONSE SCHEMAS ---
 class ScenarioModifier(BaseModel):
-    wind_speed: int
-    rainfall_increase: int
-    barrier_efficiency: int
-    cleanup_teams: int
+    wind_speed: float
+    rainfall_increase: float
+    barrier_efficiency: float
+    cleanup_teams: int = 12
+    is_barrier_active: Optional[bool] = True
     lat: Optional[float] = 19.135
     lon: Optional[float] = 72.814
+
+class SignManifestRequest(BaseModel):
+    manifest_id: str
+    upcycler_facility: Optional[str] = "Lucro Plastecycle Pvt Ltd"
 
 class DispatchRequest(BaseModel):
     hotspots: list
@@ -246,9 +251,26 @@ def retrain_model():
         res["mae"] = max(5.0, res["mae"] - (bonus_acc / 5.0))
         res["r2"] = min(0.99, res["r2"] + (bonus_acc / 100.0))
         
-        return {"status": "success", "metrics": res, "samples_processed": len(df_hist) + len(df_evals)}
+        samples_count = len(df_hist) + len(df_evals)
+        store_service.record_retrain(res, samples_count)
+        
+        return {"status": "success", "metrics": res, "samples_processed": samples_count}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+@app.get("/api/v1/ml/retrain-history")
+def get_retrain_history():
+    return store_service.get_retrain_history()
+
+# --- CIRCULAR ECONOMY LEDGER ---
+@app.get("/api/v1/recovery/manifests")
+def get_circular_manifests():
+    return store_service.get_circular_manifests()
+
+@app.post("/api/v1/recovery/sign-manifest")
+def sign_circular_manifest(req: SignManifestRequest):
+    success = store_service.sign_circular_manifest(req.manifest_id, req.upcycler_facility)
+    return {"status": "success", "signed": success, "manifest_id": req.manifest_id}
 
 # --- SIMULATION & DIGITAL TWIN ---
 @app.post("/api/v1/simulate/scenario")
@@ -257,17 +279,31 @@ def run_simulation(scenario: ScenarioModifier):
     lat = scenario.lat if scenario.lat is not None else 19.135
     lon = scenario.lon if scenario.lon is not None else 72.814
     
-    res_baseline = drift_engine.simulate_drift_monte_carlo(lat, lon, live_env, hours=72, num_particles=120)
+    # Baseline simulation: no defensive barrier, no active skimming
+    res_baseline = drift_engine.simulate_drift_monte_carlo(
+        lat, lon, live_env, hours=72, num_particles=120,
+        barrier_active=False, barrier_efficiency=0.0, cleanup_teams=0
+    )
     
     import copy
     intervention_env = copy.deepcopy(live_env)
     if "weather" not in intervention_env: intervention_env["weather"] = {}
     intervention_env["weather"]["wind_speed_10m"] = scenario.wind_speed
     
-    res_intervention = drift_engine.simulate_drift_monte_carlo(lat, lon, intervention_env, hours=72, num_particles=120)
+    # Intervention simulation: physical barrier boom collision + skimmer squad intercepts
+    eff = float(scenario.barrier_efficiency) if scenario.is_barrier_active else 0.0
+    res_intervention = drift_engine.simulate_drift_monte_carlo(
+        lat, lon, intervention_env, hours=72, num_particles=120,
+        barrier_active=bool(scenario.is_barrier_active),
+        barrier_efficiency=eff,
+        cleanup_teams=scenario.cleanup_teams
+    )
     
     beached_perc = res_intervention["beached_percent_final"]
-    predicted = int(62 + beached_perc * 2.5 + scenario.rainfall_increase * 1.2 - scenario.barrier_efficiency * 0.6)
+    trapped_perc = res_intervention.get("trapped_percent_final", 0.0)
+    
+    # Debris mass accumulation accounting for offshore capture and runoff
+    predicted = int(62 + beached_perc * 2.5 + scenario.rainfall_increase * 1.2 - trapped_perc * 1.4)
     curve_data = [int(p["beached_percent"]) for p in res_intervention["trajectory"]]
     
     return {
@@ -275,6 +311,8 @@ def run_simulation(scenario: ScenarioModifier):
         "peak_risk_time_hours": 36,
         "curve_data": curve_data,
         "ai_confidence": 88,
+        "beached_percent_final": beached_perc,
+        "trapped_percent_final": trapped_perc,
         "trajectory_baseline": res_baseline["trajectory"],
         "trajectory_intervention": res_intervention["trajectory"]
     }

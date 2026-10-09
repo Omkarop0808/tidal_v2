@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/layout/Sidebar';
 import Header from './components/layout/Header';
+import TacticalMissionRibbon from './components/layout/TacticalMissionRibbon';
 import Overview from './pages/Overview';
 import Simulate from './pages/Simulate';
 import Hotspots from './pages/Hotspots';
@@ -46,7 +47,9 @@ function App() {
             isCollapsed={sidebarCollapsed}
           />
           
-          <main className="relative pt-16 flex-1 flex flex-col">
+          <TacticalMissionRibbon isCollapsed={sidebarCollapsed} />
+          
+          <main className="relative pt-28 flex-1 flex flex-col">
             <Routes>
               <Route path="/" element={<Navigate to="/overview" replace />} />
               <Route path="/overview" element={<Overview />} />

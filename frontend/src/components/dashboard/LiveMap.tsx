@@ -1,4 +1,5 @@
-import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { Navigation, Crosshair } from 'lucide-react';
@@ -12,6 +13,40 @@ interface LiveMapProps {
   onSelectZone?: (index: number) => void;
   isFleetDispatched?: boolean;
 }
+
+// Controller component to smoothly pan/zoom to selected hotspot and open popup
+const MapController = ({ 
+  selectedHotspot, 
+  selectedZoneIndex,
+  markerRefs 
+}: { 
+  selectedHotspot?: any; 
+  selectedZoneIndex: number;
+  markerRefs: React.MutableRefObject<Record<number, L.Marker | null>>;
+}) => {
+  const map = useMap();
+
+  useEffect(() => {
+    if (selectedHotspot && selectedHotspot.lat && selectedHotspot.lon) {
+      map.flyTo([selectedHotspot.lat, selectedHotspot.lon], 13, {
+        duration: 0.9,
+        easeLinearity: 0.25
+      });
+
+      // Auto-open marker popup after flight begins
+      const timer = setTimeout(() => {
+        const marker = markerRefs.current[selectedZoneIndex];
+        if (marker) {
+          marker.openPopup();
+        }
+      }, 350);
+
+      return () => clearTimeout(timer);
+    }
+  }, [selectedZoneIndex, selectedHotspot, map, markerRefs]);
+
+  return null;
+};
 
 const createHotspotIcon = (h: any, isSelected: boolean) => {
   const isCritical = h.severity?.toLowerCase() === 'critical' || (h.risk_percentage && h.risk_percentage > 75);
@@ -27,23 +62,23 @@ const createHotspotIcon = (h: any, isSelected: boolean) => {
     html: `
       <div class="relative flex items-center justify-center cursor-pointer group" style="width: 32px; height: 32px;">
         
-        <!-- Subtle 1px Sonar Pulse (No excessive blur or dirty glow) -->
+        <!-- Subtle 1px Sonar Pulse -->
         ${isCritical ? `
           <span class="absolute inset-1 rounded-full border border-[#ff4d00] animate-ping opacity-60 pointer-events-none" style="animation-duration: 2.2s;"></span>
         ` : ''}
 
         <!-- Active Target Lock Reticle (when selected) -->
         ${isSelected ? `
-          <div class="absolute inset-0 border border-white/60 pointer-events-none animate-pulse">
-            <span class="absolute -top-1 -left-1 w-1.5 h-1.5 border-t-2 border-l-2 border-[#ff4d00]"></span>
-            <span class="absolute -top-1 -right-1 w-1.5 h-1.5 border-t-2 border-r-2 border-[#ff4d00]"></span>
-            <span class="absolute -bottom-1 -left-1 w-1.5 h-1.5 border-b-2 border-l-2 border-[#ff4d00]"></span>
-            <span class="absolute -bottom-1 -right-1 w-1.5 h-1.5 border-b-2 border-r-2 border-[#ff4d00]"></span>
+          <div class="absolute inset-0 border border-white/80 pointer-events-none animate-pulse scale-110">
+            <span class="absolute -top-1 -left-1 w-2 h-2 border-t-2 border-l-2 border-[#ff4d00]"></span>
+            <span class="absolute -top-1 -right-1 w-2 h-2 border-t-2 border-r-2 border-[#ff4d00]"></span>
+            <span class="absolute -bottom-1 -left-1 w-2 h-2 border-b-2 border-l-2 border-[#ff4d00]"></span>
+            <span class="absolute -bottom-1 -right-1 w-2 h-2 border-b-2 border-r-2 border-[#ff4d00]"></span>
           </div>
         ` : ''}
 
-        <!-- Tactical Core Beacon (Crisp 14px with 1.5px white border) -->
-        <div class="relative w-3.5 h-3.5 flex items-center justify-center transition-transform duration-150 group-hover:scale-125 shadow-md"
+        <!-- Tactical Core Beacon -->
+        <div class="relative w-3.5 h-3.5 flex items-center justify-center transition-transform duration-150 group-hover:scale-125 shadow-md ${isSelected ? 'scale-125 ring-2 ring-white ring-offset-1 ring-offset-black' : ''}"
              style="background-color: ${themeColor}; border: 1.5px solid #ffffff;">
           ${isCleaned ? `
             <svg class="w-2.5 h-2.5 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
@@ -78,18 +113,20 @@ export const LiveMap = ({
   onSelectZone, 
   isFleetDispatched = false 
 }: LiveMapProps) => {
+  const markerRefs = useRef<Record<number, L.Marker | null>>({});
+  const selectedHotspot = hotspots[selectedZoneIndex] || hotspots[0];
 
   return (
     <div className="flex flex-col h-full bg-[#050505] relative overflow-hidden min-h-[560px]">
       
       {/* Map Overlay Header */}
       <div className="absolute top-0 left-0 w-full z-10 flex items-start justify-between p-4 sm:p-6 pointer-events-none">
-        <div className="flex items-center gap-3 bg-black border-2 border-white text-white px-4 py-2 pointer-events-auto font-mono text-[10px] uppercase font-bold tracking-widest">
+        <div className="flex items-center gap-3 bg-black border-2 border-white text-white px-4 py-2 pointer-events-auto font-mono text-[10px] uppercase font-bold tracking-widest shadow-2xl">
           <span className="w-2.5 h-2.5 bg-[#ff4d00] animate-ping"></span>
           <span>MUMBAI RADAR • SECTOR OPS</span>
         </div>
         
-        <div className={`flex items-center gap-3 bg-black border-2 text-[10px] px-4 py-2 font-mono font-bold tracking-widest uppercase pointer-events-auto ${isFleetDispatched ? 'border-[#ff4d00] text-[#ff4d00]' : 'border-[#333333] text-white'}`}>
+        <div className={`flex items-center gap-3 bg-black border-2 text-[10px] px-4 py-2 font-mono font-bold tracking-widest uppercase pointer-events-auto shadow-2xl ${isFleetDispatched ? 'border-[#ff4d00] text-[#ff4d00]' : 'border-[#333333] text-white'}`}>
           {isFleetDispatched ? (
             <span className="flex items-center gap-2">
               <span className="w-2 h-2 bg-[#ff4d00] animate-pulse"></span>
@@ -104,7 +141,7 @@ export const LiveMap = ({
         </div>
       </div>
 
-      {/* Esri World Dark Gray Base Map - Zero API Key, Zero Watermark */}
+      {/* Esri World Dark Gray Base Map */}
       <div className="absolute inset-0 z-0">
         <MapContainer 
           center={CENTER_POS} 
@@ -113,6 +150,13 @@ export const LiveMap = ({
           zoomControl={false}
           attributionControl={false}
         >
+          {/* Synchronized map movement & popup focus */}
+          <MapController 
+            selectedHotspot={selectedHotspot} 
+            selectedZoneIndex={selectedZoneIndex}
+            markerRefs={markerRefs}
+          />
+
           <TileLayer 
             url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}"
             maxZoom={16}
@@ -151,7 +195,7 @@ export const LiveMap = ({
           </Marker>
 
           {/* Transit Vectors */}
-          {hotspots.slice(0, 4).map((h, idx) => {
+          {hotspots.slice(0, 6).map((h, idx) => {
             const isSelected = selectedZoneIndex === idx;
             return (
               <Polyline 
@@ -160,8 +204,8 @@ export const LiveMap = ({
                 pathOptions={{ 
                   color: isSelected ? '#ff4d00' : isFleetDispatched ? '#ffffff' : '#333333', 
                   dashArray: isSelected ? '4, 4' : '6, 8', 
-                  weight: isSelected ? 3 : isFleetDispatched ? 2 : 1,
-                  opacity: isSelected ? 1 : 0.6
+                  weight: isSelected ? 3.5 : isFleetDispatched ? 2 : 1,
+                  opacity: isSelected ? 1 : 0.5
                 }} 
               />
             );
@@ -175,6 +219,7 @@ export const LiveMap = ({
             return (
               <Marker 
                 key={`hotspot-${idx}`} 
+                ref={el => { markerRefs.current[idx] = el; }}
                 position={[h.lat, h.lon]} 
                 icon={icon}
                 eventHandlers={{
@@ -184,9 +229,10 @@ export const LiveMap = ({
                 }}
               >
                 <Popup>
-                  <div className="p-4 bg-[#050505] text-white font-mono text-xs uppercase min-w-[230px]">
+                  <div className="p-4 bg-[#050505] text-white font-mono text-xs uppercase min-w-[240px]">
                     <div className="flex items-center justify-between pb-2 border-b border-[#333333] mb-3">
-                      <div className="font-headline font-black text-sm text-white tracking-tight">
+                      <div className="font-headline font-black text-sm text-white tracking-tight flex items-center gap-1.5">
+                        <span className={`w-2 h-2 ${isSelected ? 'bg-[#ff4d00]' : 'bg-white'}`}></span>
                         {h.zone_name}
                       </div>
                       <span className="text-[9px] px-1.5 py-0.5 bg-[#222222] text-[#ff4d00] font-bold">
@@ -215,14 +261,9 @@ export const LiveMap = ({
                       PEAK ARRIVAL: <strong className="text-white">T+{h.peak_arrival_hours || 12}H</strong>
                     </div>
 
-                    <button 
-                      onClick={() => {
-                        if (onSelectZone) onSelectZone(idx);
-                      }}
-                      className="w-full py-2 bg-[#ff4d00] hover:bg-white text-black font-headline font-black text-[10px] uppercase tracking-widest transition-none"
-                    >
-                      FOCUS RANKING ITEM #{idx + 1}
-                    </button>
+                    <div className="px-2 py-1 bg-[#111111] border border-[#ff4d00]/40 text-[#ff4d00] text-[9px] text-center font-bold tracking-widest">
+                      {isSelected ? 'LOCKED TARGET // TELEMETRY SYNCED' : 'CLICK TO SELECT'}
+                    </div>
                   </div>
                 </Popup>
               </Marker>

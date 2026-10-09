@@ -8,6 +8,7 @@ import {
   ChevronRight,
   AlertTriangle
 } from 'lucide-react';
+import { useSim } from '../../store';
 
 interface HeaderProps {
   onToggleMobile?: () => void;
@@ -17,6 +18,7 @@ interface HeaderProps {
 export const Header = ({ onToggleMobile, isCollapsed = false }: HeaderProps) => {
   const [time, setTime] = useState<string>('');
   const [showNotifications, setShowNotifications] = useState(false);
+  const activeMission = useSim(state => state.activeMission);
 
   useEffect(() => {
     const updateTime = () => {
@@ -52,7 +54,7 @@ export const Header = ({ onToggleMobile, isCollapsed = false }: HeaderProps) => 
             <Globe2 className="w-3.5 h-3.5 text-[#ff4d00]" />
             <span>MUMBAI COAST</span>
             <ChevronRight className="w-3 h-3 text-[#525252]" />
-            <span className="text-[#a3a3a3]">SEC_04</span>
+            <span className="text-[#a3a3a3]">{activeMission.zoneName.split(' ')[0]}</span>
           </div>
 
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 border border-[#333333] bg-[#111111] text-white">

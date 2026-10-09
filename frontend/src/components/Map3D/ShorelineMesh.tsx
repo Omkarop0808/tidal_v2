@@ -92,7 +92,7 @@ export function ShorelineMesh() {
 
     const edgePoints = shorelinePoints.slice(0, 27).map(p => new THREE.Vector3(p.x, 1.9, p.y));
     const edgeGeom = new THREE.BufferGeometry().setFromPoints(edgePoints);
-    const edgeMat = new THREE.LineBasicMaterial({ color: '#00e5ff', transparent: true, opacity: 0.85 });
+    const edgeMat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 });
     const lineObj = new THREE.Line(edgeGeom, edgeMat);
 
     return { geometry: geom, lineObj };
@@ -103,20 +103,20 @@ export function ShorelineMesh() {
       {/* 3D Landmass Mesh */}
       <mesh geometry={geometry} receiveShadow castShadow>
         <meshStandardMaterial 
-          color="#08131e" 
-          roughness={0.7}
-          metalness={0.3}
+          color="#0f0f0f" 
+          roughness={0.85}
+          metalness={0.15}
         />
       </mesh>
 
-      {/* Coastline Bioluminescent Cyan Edge Line */}
+      {/* Coastline Tactical Vector Edge Line */}
       <primitive object={lineObj} />
 
       {/* Coastal Outfalls & Landmarks with interactive pins */}
       {OUTFALL_LOCATIONS.map((loc) => {
         const { x, z } = projectLatLon(loc.lat, loc.lon);
         const isSelected = selectedLocation.id === loc.id;
-        const isVersova = loc.id === 'versova';
+        const isCritical = loc.id === 'versova' || loc.id === 'mahim';
 
         return (
           <group 
@@ -126,32 +126,32 @@ export function ShorelineMesh() {
           >
             {/* 3D Pin Beacon */}
             <mesh position={[0, 0, 0]}>
-              <sphereGeometry args={[isSelected ? 0.9 : 0.6, 16, 16]} />
+              <boxGeometry args={[isSelected ? 1.0 : 0.6, isSelected ? 1.0 : 0.6, isSelected ? 1.0 : 0.6]} />
               <meshBasicMaterial 
-                color={isSelected ? '#00e5ff' : isVersova ? '#ff3b30' : '#38bdf8'} 
+                color={isSelected ? '#ff4d00' : isCritical ? '#ffffff' : '#737373'} 
               />
             </mesh>
 
-            {/* Pulsing ring under marker */}
-            <mesh position={[0, -0.5, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-              <ringGeometry args={[isSelected ? 1.0 : 0.7, isSelected ? 1.6 : 1.1, 16]} />
+            {/* Target Reticle under active marker */}
+            <mesh position={[0, -0.4, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+              <ringGeometry args={[isSelected ? 0.9 : 0.6, isSelected ? 1.5 : 0.9, 16]} />
               <meshBasicMaterial 
-                color={isSelected ? '#00e5ff' : isVersova ? '#ff3b30' : '#38bdf8'} 
+                color={isSelected ? '#ff4d00' : '#ffffff'} 
                 transparent 
-                opacity={isSelected ? 0.8 : 0.4} 
+                opacity={isSelected ? 0.9 : 0.25} 
               />
             </mesh>
 
-            {/* Label Annotation */}
-            <Html distanceFactor={45} position={[0, 1.4, 0]} center pointerEvents="none">
-              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg backdrop-blur-md text-[10px] font-mono whitespace-nowrap shadow-xl border transition-all ${
+            {/* Tactical Label Annotation */}
+            <Html distanceFactor={45} position={[0, 1.5, 0]} center pointerEvents="none">
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 border text-[9px] font-mono uppercase font-bold tracking-wider whitespace-nowrap shadow-2xl transition-all ${
                 isSelected 
-                  ? 'bg-[#00e5ff]/20 border-[#00e5ff] text-[#00e5ff] font-bold shadow-[0_0_15px_rgba(0,229,255,0.4)]' 
-                  : isVersova
-                  ? 'bg-[#ff3b30]/15 border-[#ff3b30]/40 text-slate-100'
-                  : 'bg-[#03070a]/90 border-slate-700/60 text-slate-300'
+                  ? 'bg-black text-[#ff4d00] border-[#ff4d00] shadow-[0_0_12px_rgba(255,77,0,0.4)]' 
+                  : isCritical
+                  ? 'bg-black/90 text-white border-white'
+                  : 'bg-black/80 text-[#a3a3a3] border-[#333333]'
               }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-cyan-400 animate-ping' : isVersova ? 'bg-red-500' : 'bg-sky-400'}`}></span>
+                <span className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-[#ff4d00] animate-ping' : isCritical ? 'bg-white' : 'bg-[#737373]'}`}></span>
                 <span>{loc.name.split(' ')[0]}</span>
               </div>
             </Html>

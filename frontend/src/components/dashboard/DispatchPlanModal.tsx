@@ -133,7 +133,7 @@ export const DispatchPlanModal: React.FC<DispatchPlanModalProps> = ({ isOpen, on
 
               {/* Vessel Assignment Cards */}
               <div className="grid grid-cols-1 gap-[1px] bg-[#333333] border-2 border-[#333333]">
-                {assignments.map((assignment, idx) => (
+                {assignments.map((assignment: any, idx) => (
                   <div 
                     key={idx} 
                     className="p-6 bg-[#000000] hover:bg-[#111111] transition-none flex flex-col gap-6 group"
@@ -152,22 +152,27 @@ export const DispatchPlanModal: React.FC<DispatchPlanModalProps> = ({ isOpen, on
 
                       <div className="flex flex-col gap-2 font-mono text-[10px] uppercase font-bold tracking-widest text-[#a3a3a3]">
                         <span className="flex items-center justify-between gap-4 border-b border-[#333333] pb-1">
-                          <span>ETA</span>
-                          <span className="text-white">{assignment.eta_hours}H</span>
+                          <span>TRANSIT ETA</span>
+                          <span className="text-white">{assignment.eta_hours}H ({assignment.distance_nm || 8.4} NM @ 12 KTS)</span>
                         </span>
                         <span className="flex items-center justify-between gap-4 border-b border-[#333333] pb-1">
-                          <span>CAPACITY</span>
+                          <span>PAYLOAD TARGET</span>
                           <span className="text-white">{assignment.estimated_recovery_kg} KG</span>
                         </span>
                       </div>
                     </div>
 
                     <div className="p-4 bg-[#111111] border-l-4 border-l-[#ff4d00] text-[10px] font-mono uppercase font-bold tracking-widest text-[#a3a3a3] leading-relaxed">
-                      <strong className="text-white mr-2">AI RATIONALE:</strong>
+                      <strong className="text-white mr-2">HUNGARIAN DISPATCH RATIONALE:</strong>
                       {assignment.reasoning}
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Navigation Estimate Disclaimer */}
+              <div className="p-3 bg-[#0a0a0a] border border-[#222222] font-mono text-[9px] text-[#737373] uppercase leading-relaxed">
+                *NAUTICAL TRANSIT NOTE: ETAs reflect deterministic great-circle Haversine sea distances at 12 knots patrol speed + 0.2h harbor unmooring. Actual navigable passage through narrow creek sandbars (e.g. Versova & Malad) may require localized pilotage maneuvers.
               </div>
             </>
           )}

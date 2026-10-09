@@ -37,9 +37,10 @@ export const api = {
     headers: { 'Content-Type': 'multipart/form-data' }
   }).then(res => res.data),
 
-  // Accuracy Analytics
+  // Accuracy Analytics & Retraining
   getAccuracyAnalytics: () => apiClient.get('/analytics/accuracy').then(res => res.data),
   retrainModel: () => apiClient.post('/ml/retrain').then(res => res.data),
+  getRetrainHistory: () => apiClient.get('/ml/retrain-history').then(res => res.data),
 
   // Fleet & Dispatch
   optimizeDispatch: (hotspots: any[]) => apiClient.post('/dispatch/optimize', { hotspots }).then(res => res.data),
@@ -48,10 +49,13 @@ export const api = {
   runSimulation: (scenario: any) => apiClient.post('/simulate/scenario', scenario).then(res => res.data),
   getDriftTrajectory: (lat: number, lon: number) => apiClient.get(`/simulate/predictive?lat=${lat}&lon=${lon}`).then(res => res.data),
   
-  // Optical Vision & Upcycling
+  // Optical Vision & Circular Upcycling Ledger
   reportObservation: (formData: FormData) => apiClient.post('/recovery/observation', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }).then(res => res.data),
+  getCircularManifests: () => apiClient.get('/recovery/manifests').then(res => res.data),
+  signCircularManifest: (data: { manifest_id: string; upcycler_facility?: string }) => 
+    apiClient.post('/recovery/sign-manifest', data).then(res => res.data),
   
   // Chat
   chat: (message: string) => apiClient.post('/chat', { message }).then(res => res.data),

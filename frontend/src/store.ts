@@ -45,7 +45,21 @@ export const OUTFALL_LOCATIONS: OutfallLocation[] = [
   { id: 'colaba', name: 'Colaba Port HQ & Navy Basin', sector: 'South Mumbai', lat: 18.900, lon: 72.815, defaultMass: 140, description: 'Southernmost naval harbor and maritime fleet dispatch headquarters' },
 ];
 
+export interface ActiveMission {
+  zoneId: string;
+  zoneName: string;
+  sector: string;
+  lat: number;
+  lon: number;
+  status: 'MONITORING' | 'CRITICAL' | 'INTERCEPT_SCHEDULED' | 'CLEANUP_LOGGED';
+  riskScore: number;
+  debrisKg: number;
+}
+
 export interface SimState {
+  // Global Active Incident Mission
+  activeMission: ActiveMission;
+  
   // Scenario Inputs
   selectedLocation: OutfallLocation;
   debrisMassKg: number;
@@ -59,6 +73,9 @@ export interface SimState {
   // Camera & Visualizer View
   cameraView: 'perspective' | 'topDown' | 'shoreline';
   
+  // Playback & Scrubber Controls
+  playbackSpeed: number; // 0.5, 1, 2, 4
+  
   // Trajectory Simulation Data
   trajectory: TrajectoryFrame[]; // Mitigated / Intervention
   trajectoryBaseline: TrajectoryFrame[]; // Unmitigated Baseline
@@ -66,16 +83,30 @@ export interface SimState {
   isPlaying: boolean;
   
   // Actions
+  setActiveMissionZone: (zoneId: string) => void;
   setSelectedLocation: (loc: OutfallLocation) => void;
   setScenario: (updates: Partial<SimState>) => void;
   setTrajectory: (trajectory: TrajectoryFrame[]) => void;
   setTrajectoryBaseline: (trajectoryBaseline: TrajectoryFrame[]) => void;
   setCurrentFrame: (index: number) => void;
   setCameraView: (view: 'perspective' | 'topDown' | 'shoreline') => void;
+  setPlaybackSpeed: (speed: number) => void;
   togglePlay: () => void;
+  setIsPlaying: (isPlaying: boolean) => void;
 }
 
 export const useSim = create<SimState>((set) => ({
+  activeMission: {
+    zoneId: 'versova',
+    zoneName: 'Versova Creek Outfall Channel',
+    sector: 'North-West Coast',
+    lat: 19.135,
+    lon: 72.814,
+    status: 'CRITICAL',
+    riskScore: 94,
+    debrisKg: 520
+  },
+  
   selectedLocation: OUTFALL_LOCATIONS[0],
   debrisMassKg: 520,
   materialType: 'Mixed Polymers (PET / HDPE / Ghost Nets)',
@@ -85,19 +116,52 @@ export const useSim = create<SimState>((set) => ({
   cleanupTeams: 12,
   isBarrierActive: true,
   cameraView: 'perspective',
+  playbackSpeed: 1,
   
   trajectory: [],
   trajectoryBaseline: [],
   currentFrameIndex: 0,
   isPlaying: false,
   
-  setSelectedLocation: (selectedLocation) => set({ selectedLocation }),
+  setActiveMissionZone: (zoneId) => {
+    const loc = OUTFALL_LOCATIONS.find(l => l.id.toLowerCase() === zoneId.toLowerCase()) || OUTFALL_LOCATIONS[0];
+    set({
+      selectedLocation: loc,
+      activeMission: {
+        zoneId: loc.id,
+        zoneName: loc.name,
+        sector: loc.sector,
+        lat: loc.lat,
+        lon: loc.lon,
+        status: loc.id === 'versova' ? 'CRITICAL' : 'MONITORING',
+        riskScore: loc.id === 'versova' ? 94 : loc.id === 'mahim' ? 88 : loc.id === 'juhu' ? 82 : 65,
+        debrisKg: loc.defaultMass
+      },
+      debrisMassKg: loc.defaultMass
+    });
+  },
+  
+  setSelectedLocation: (selectedLocation) => set({ 
+    selectedLocation,
+    activeMission: {
+      zoneId: selectedLocation.id,
+      zoneName: selectedLocation.name,
+      sector: selectedLocation.sector,
+      lat: selectedLocation.lat,
+      lon: selectedLocation.lon,
+      status: selectedLocation.id === 'versova' ? 'CRITICAL' : 'MONITORING',
+      riskScore: selectedLocation.id === 'versova' ? 94 : 70,
+      debrisKg: selectedLocation.defaultMass
+    }
+  }),
   setScenario: (updates) => set((state) => ({ ...state, ...updates })),
   setTrajectory: (trajectory) => set({ trajectory, currentFrameIndex: 0 }),
   setTrajectoryBaseline: (trajectoryBaseline) => set({ trajectoryBaseline }),
   setCurrentFrame: (index) => set({ currentFrameIndex: index }),
   setCameraView: (cameraView) => set({ cameraView }),
+  setPlaybackSpeed: (playbackSpeed) => set({ playbackSpeed }),
   togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+  setIsPlaying: (isPlaying) => set({ isPlaying }),
 }));
 
 export default useSim;

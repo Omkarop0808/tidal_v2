@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, 
   Upload, 
@@ -10,7 +10,10 @@ import {
   Truck, 
   FileText,
   Sliders,
-  Square
+  Square,
+  CheckCircle2,
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { api } from '../lib/api';
 
@@ -23,7 +26,26 @@ export default function CircularRecovery() {
   const [manifestGenerated, setManifestGenerated] = useState(false);
   const [manifestHash, setManifestHash] = useState('');
   const [isGeneratingManifest, setIsGeneratingManifest] = useState(false);
+  const [manifests, setManifests] = useState<any[]>([]);
+  const [isLoadingManifests, setIsLoadingManifests] = useState(false);
+  const [signingId, setSigningId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const loadManifests = async () => {
+    setIsLoadingManifests(true);
+    try {
+      const data = await api.getCircularManifests();
+      setManifests(data);
+    } catch (err) {
+      console.error("Failed to load circular manifests:", err);
+    } finally {
+      setIsLoadingManifests(false);
+    }
+  };
+
+  useEffect(() => {
+    loadManifests();
+  }, []);
 
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -47,19 +69,46 @@ export default function CircularRecovery() {
     }
   };
 
-  const handleExecuteManifest = () => {
+  const handleExecuteManifest = async () => {
     setIsGeneratingManifest(true);
-    setTimeout(() => {
-      const hash = '0x' + Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
-      setManifestHash(hash);
-      setIsGeneratingManifest(false);
+    try {
+      const pending = manifests.find(m => m.status === 'PENDING_VALUATION');
+      if (pending) {
+        await api.signCircularManifest({ manifest_id: pending.id });
+        setManifestHash(pending.id);
+      } else {
+        const hash = '0x' + Array.from({length: 8}, () => Math.floor(Math.random()*16).toString(16)).join('').toUpperCase();
+        setManifestHash(hash);
+      }
+      await loadManifests();
       setManifestGenerated(true);
-    }, 1500);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsGeneratingManifest(false);
+    }
+  };
+
+  const handleSignRowManifest = async (id: string) => {
+    setSigningId(id);
+    try {
+      await api.signCircularManifest({ manifest_id: id });
+      await loadManifests();
+    } catch (err) {
+      console.error("Failed to sign manifest:", err);
+    } finally {
+      setSigningId(null);
+    }
   };
 
   const estimatedWeight = isLiveMode ? 25.0 : (analysisResult?.ai_analysis?.estimated_weight_kg || 18.4);
   const spotRate = 35.0; 
   const grossValue = Math.round(estimatedWeight * spotRate);
+
+  const totalMassKg = manifests.reduce((acc, m) => acc + (m.plastic_mass_kg || 0), 0);
+  const totalGrossInr = manifests.reduce((acc, m) => acc + (m.gross_valuation_inr || 0), 0);
+  const totalCo2e = manifests.reduce((acc, m) => acc + (m.co2e_avoided_kg || 0), 0);
+  const totalCredits = manifests.reduce((acc, m) => acc + (m.epr_credits || 0), 0);
 
   return (
     <main className="w-full bg-[#050505] min-h-screen text-white px-4 sm:px-8 lg:px-12 py-8 max-w-[1600px] mx-auto border-x-2 border-[#333333]">
@@ -345,6 +394,144 @@ export default function CircularRecovery() {
 
           </div>
         </div>
+
+        {/* Circular Economy & Real-Time EPR Material Audit Ledger */}
+        <div className="flex flex-col gap-6 pt-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b-2 border-[#333333]">
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3 text-[10px] font-mono text-[#ff4d00] uppercase font-bold tracking-widest">
+                <Recycle className="w-4 h-4 text-[#ff4d00]" />
+                <span>OFFICIAL VERIFICATION // RECOVERY REPOSITORY</span>
+              </div>
+              <h2 className="text-3xl font-headline font-black text-white uppercase tracking-tighter">
+                EPR Material Audit Ledger
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={loadManifests}
+                disabled={isLoadingManifests}
+                className="px-4 py-2 bg-[#111111] hover:bg-white text-white hover:text-black border-2 border-[#333333] hover:border-white font-mono text-[10px] uppercase font-bold tracking-widest flex items-center gap-2 transition-none"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingManifests ? 'animate-spin' : ''}`} />
+                <span>REFRESH LEDGER</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Aggregate KPI Summary Banner */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-[1px] bg-[#333333] border-2 border-[#333333]">
+            <div className="p-6 bg-[#000000] flex flex-col gap-1 border-l-4 border-l-white">
+              <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">TOTAL RECOVERED</span>
+              <span className="text-3xl sm:text-4xl font-headline font-black text-white">{totalMassKg.toLocaleString()} KG</span>
+              <span className="text-[9px] font-mono text-[#525252] uppercase font-bold">ALL COASTAL SWEEPS</span>
+            </div>
+
+            <div className="p-6 bg-[#000000] flex flex-col gap-1 border-l-4 border-l-[#ff4d00]">
+              <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">MARKET VALUE</span>
+              <span className="text-3xl sm:text-4xl font-headline font-black text-[#ff4d00]">₹{totalGrossInr.toLocaleString()}</span>
+              <span className="text-[9px] font-mono text-[#525252] uppercase font-bold">REALIZED INFLOW</span>
+            </div>
+
+            <div className="p-6 bg-[#000000] flex flex-col gap-1 border-l-4 border-l-emerald-500">
+              <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">CO₂e AVOIDED</span>
+              <span className="text-3xl sm:text-4xl font-headline font-black text-emerald-400">+{totalCo2e.toFixed(0)} KG</span>
+              <span className="text-[9px] font-mono text-[#525252] uppercase font-bold">VIRGIN RESIN OFFSET</span>
+            </div>
+
+            <div className="p-6 bg-[#000000] flex flex-col gap-1 border-l-4 border-l-sky-500">
+              <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">EPR CREDITS</span>
+              <span className="text-3xl sm:text-4xl font-headline font-black text-sky-400">{totalCredits}</span>
+              <span className="text-[9px] font-mono text-[#525252] uppercase font-bold">CPCB COMPLIANT</span>
+            </div>
+          </div>
+
+          {/* Ledger Table */}
+          <div className="w-full bg-[#000000] border-2 border-[#333333] overflow-x-auto">
+            <table className="w-full text-left border-collapse font-mono text-xs">
+              <thead>
+                <tr className="border-b-2 border-[#333333] bg-[#111111] text-[10px] text-[#a3a3a3] uppercase tracking-widest font-bold">
+                  <th className="p-4">MANIFEST REF</th>
+                  <th className="p-4">COASTAL ZONE</th>
+                  <th className="p-4">MASS & POLYMER</th>
+                  <th className="p-4">VALUATION (₹)</th>
+                  <th className="p-4">CERTIFIED UPCYCLER</th>
+                  <th className="p-4">STATUS</th>
+                  <th className="p-4 text-right">ACTION</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#222222]">
+                {manifests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-[#525252] font-mono uppercase tracking-widest font-bold">
+                      AWAITING FIRST COMPLETED FIELD OPERATION TO MINT CERTIFICATE
+                    </td>
+                  </tr>
+                ) : (
+                  manifests.map((m) => {
+                    const isIssued = m.status === 'MANIFEST_ISSUED' || m.status === 'DISPATCHED_TO_UPCYCLER';
+                    return (
+                      <tr key={m.id} className="hover:bg-[#0a0a0a] transition-none">
+                        <td className="p-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-white font-headline font-black text-sm tracking-tight">{m.id}</span>
+                            <span className="text-[9px] text-[#737373]">{m.created_at ? new Date(m.created_at).toLocaleDateString() : 'ACTIVE'}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="text-white font-bold uppercase">{m.beach_name || m.beach_id}</span>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-white font-bold">{m.plastic_mass_kg} KG</span>
+                            <span className="text-[9px] text-[#a3a3a3] line-clamp-1">{m.composition || 'MIXED POLYMERS'}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[#ff4d00] font-headline font-black text-sm">₹{Number(m.gross_valuation_inr).toLocaleString()}</span>
+                            <span className="text-[9px] text-emerald-400">+{m.co2e_avoided_kg} KG CO₂</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2 text-[#a3a3a3]">
+                            <Truck className="w-3.5 h-3.5 text-white shrink-0" />
+                            <span className="text-[10px] text-white uppercase font-bold">{m.upcycler_facility}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className={`px-2.5 py-1 text-[9px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5 ${
+                            isIssued ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-[#ff4d00]/10 text-[#ff4d00] border border-[#ff4d00]/30'
+                          }`}>
+                            {isIssued ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Clock className="w-3 h-3 text-[#ff4d00]" />}
+                            {m.status}
+                          </span>
+                        </td>
+                        <td className="p-4 text-right">
+                          {isIssued ? (
+                            <span className="text-[9px] text-[#737373] uppercase font-bold tracking-widest">
+                              SIGNED
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleSignRowManifest(m.id)}
+                              disabled={signingId === m.id}
+                              className="px-4 py-2 bg-white hover:bg-[#ff4d00] text-black font-headline font-black text-[10px] uppercase tracking-widest transition-none disabled:opacity-50"
+                            >
+                              {signingId === m.id ? 'SIGNING...' : 'SIGN & ISSUE'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       </div>
     </main>
   );

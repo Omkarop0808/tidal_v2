@@ -11,10 +11,13 @@ class DriftEngine:
         # Simple coastline approx (longitudes eastward of this are 'beached' in Mumbai)
         self.coastline_lon = 72.82 
 
-    def simulate_drift_monte_carlo(self, start_lat: float, start_lon: float, env_data: dict, hours: int = 72, num_particles: int = 1000):
+    def simulate_drift_monte_carlo(self, start_lat: float, start_lon: float, env_data: dict, 
+                                   hours: int = 72, num_particles: int = 120,
+                                   barrier_active: bool = False, barrier_efficiency: float = 0.0,
+                                   cleanup_teams: int = 0):
         """
-        Vectorized Monte-Carlo simulation for N particles.
-        Returns the center trajectory and the percentage of particles that beach.
+        Vectorized Monte-Carlo simulation for N particles with physical
+        containment boom collision and skimmer squad interception dynamics.
         """
         # Fallback physics if env_data is missing
         wind_u, wind_v = 0.0, 0.0
@@ -37,10 +40,13 @@ class DriftEngine:
             curr_u = curr_speed * np.sin(np.radians(curr_dir))
             curr_v = curr_speed * np.cos(np.radians(curr_dir))
 
-        # Initialize particles
-        particles_lat = np.full(num_particles, start_lat)
-        particles_lon = np.full(num_particles, start_lon)
+        # Initialize particles with slight initial outfall dispersion
+        init_spread_lat = np.random.normal(0, 0.002, num_particles)
+        init_spread_lon = np.random.normal(0, 0.002, num_particles)
+        particles_lat = np.full(num_particles, start_lat) + init_spread_lat
+        particles_lon = np.full(num_particles, start_lon) + init_spread_lon
         beached_mask = np.zeros(num_particles, dtype=bool)
+        trapped_mask = np.zeros(num_particles, dtype=bool)
 
         trajectory = []
         
@@ -53,15 +59,13 @@ class DriftEngine:
 
         for hour in range(0, hours + 1, 6):
             if hour > 0:
-                lon_km = 111.0 * np.cos(np.radians(np.mean(particles_lat[~beached_mask]))) if np.any(~beached_mask) else 111.0
-                
-                # Active particles (not beached)
-                active = ~beached_mask
+                active = ~(beached_mask | trapped_mask)
                 n_active = np.sum(active)
                 
                 if n_active > 0:
-                    diffusion_u = np.random.normal(0, 0.5, n_active)
-                    diffusion_v = np.random.normal(0, 0.5, n_active)
+                    lon_km = 111.0 * np.cos(np.radians(np.mean(particles_lat[active])))
+                    diffusion_u = np.random.normal(0, 0.45, n_active)
+                    diffusion_v = np.random.normal(0, 0.45, n_active)
 
                     # Calculate shift in degrees for 6 hours
                     lat_shift = ((total_v + diffusion_v) * 6) / lat_km
@@ -70,16 +74,46 @@ class DriftEngine:
                     particles_lat[active] += lat_shift
                     particles_lon[active] += lon_shift
                     
-                    # Beaching condition: Dynamic coastline bound (Mumbai slants from Vasai ~72.78 down to Colaba ~72.82)
-                    # Simple linear approximation of coast: lon = 72.82 - (lat - 18.9) * 0.05
-                    coastline_bound = 72.82 - ((particles_lat - 18.9) * 0.05)
-                    newly_beached = (particles_lon > coastline_bound) & active
-                    beached_mask[newly_beached] = True
+                    # 1. Physical Offshore Barrier Boom Collision Check
+                    if barrier_active and barrier_efficiency > 0:
+                        # Boom arc spans ~0.02 deg west of outfall and +/- 0.02 deg lat
+                        near_boom = (
+                            (particles_lon <= (start_lon - 0.012)) & 
+                            (particles_lon >= (start_lon - 0.035)) & 
+                            (np.abs(particles_lat - start_lat) <= 0.022) & 
+                            active
+                        )
+                        if np.any(near_boom):
+                            roll = np.random.uniform(0, 100, np.sum(near_boom))
+                            caught = roll < barrier_efficiency
+                            caught_indices = np.where(near_boom)[0][caught]
+                            trapped_mask[caught_indices] = True
+                            # Pin caught particles along the protective boom line
+                            particles_lon[caught_indices] = start_lon - 0.024 - np.random.uniform(0, 0.003, len(caught_indices))
 
-            # Record center of mass of active particles, or last known if all beached
-            if np.any(~beached_mask):
-                center_lat = np.mean(particles_lat[~beached_mask])
-                center_lon = np.mean(particles_lon[~beached_mask])
+                    # 2. Offshore Autonomous Skimmer Squad Sweeps
+                    if cleanup_teams > 0:
+                        still_active = ~(beached_mask | trapped_mask)
+                        if np.any(still_active):
+                            # Skimmer interception rate scales with fleet squads deployed
+                            skim_rate = min(30.0, cleanup_teams * 2.2) # % chance per 6-hr sweep
+                            skim_roll = np.random.uniform(0, 100, np.sum(still_active))
+                            skimmed = skim_roll < skim_rate
+                            skimmed_indices = np.where(still_active)[0][skimmed]
+                            trapped_mask[skimmed_indices] = True
+
+                    # 3. Dynamic Shoreline Beaching Check (Mumbai coastline boundary)
+                    rem_active = ~(beached_mask | trapped_mask)
+                    if np.any(rem_active):
+                        coastline_bound = 72.82 - ((particles_lat - 18.9) * 0.05)
+                        newly_beached = (particles_lon > coastline_bound) & rem_active
+                        beached_mask[newly_beached] = True
+
+            # Record center of mass of active/floating particles, or overall center
+            active_final = ~(beached_mask | trapped_mask)
+            if np.any(active_final):
+                center_lat = np.mean(particles_lat[active_final])
+                center_lon = np.mean(particles_lon[active_final])
             else:
                 center_lat = np.mean(particles_lat)
                 center_lon = np.mean(particles_lon)
@@ -89,9 +123,15 @@ class DriftEngine:
                 "lat": float(center_lat),
                 "lon": float(center_lon),
                 "beached_percent": float(np.mean(beached_mask) * 100),
+                "trapped_percent": float(np.mean(trapped_mask) * 100),
                 "particles": [
-                    {"lat": float(lat), "lon": float(lon), "beached": bool(b)} 
-                    for lat, lon, b in zip(particles_lat, particles_lon, beached_mask)
+                    {
+                        "lat": float(lat), 
+                        "lon": float(lon), 
+                        "beached": bool(b), 
+                        "trapped": bool(t)
+                    } 
+                    for lat, lon, b, t in zip(particles_lat, particles_lon, beached_mask, trapped_mask)
                 ]
             })
 
@@ -99,6 +139,7 @@ class DriftEngine:
             "start_point": {"lat": start_lat, "lon": start_lon},
             "forecast_hours": hours,
             "beached_percent_final": float(np.mean(beached_mask) * 100),
+            "trapped_percent_final": float(np.mean(trapped_mask) * 100),
             "trajectory": trajectory
         }
 

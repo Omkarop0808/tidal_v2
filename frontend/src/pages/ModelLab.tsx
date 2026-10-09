@@ -5,7 +5,8 @@ import {
   RefreshCw, 
   CheckCircle2, 
   Cpu,
-  Square
+  Square,
+  GitBranch
 } from 'lucide-react';
 import AccuracyEvaluator from '../components/analytics/AccuracyEvaluator';
 import { Skeleton } from '../components/layout/Skeleton';
@@ -16,11 +17,19 @@ export default function ModelLab() {
   const [retrainSuccess, setRetrainSuccess] = useState(false);
   const [telemetryData, setTelemetryData] = useState<any>(null);
   const [labMetrics, setLabMetrics] = useState({ mae: '14.2', r2: '0.89' });
+  const [retrainHistory, setRetrainHistory] = useState<any[]>([]);
+
+  const fetchRetrainHistory = () => {
+    api.getRetrainHistory()
+      .then(res => setRetrainHistory(res))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     api.getTelemetrySummary()
       .then(res => setTelemetryData(res))
       .catch(() => {});
+    fetchRetrainHistory();
   }, []);
 
   const handleRetrain = async () => {
@@ -35,6 +44,7 @@ export default function ModelLab() {
         });
       }
       setRetrainSuccess(true);
+      fetchRetrainHistory();
       setTimeout(() => setRetrainSuccess(false), 4000);
     } catch (err) {
       console.error(err);
@@ -239,6 +249,63 @@ export default function ModelLab() {
 
         {/* Prediction vs Reality Accuracy Evaluator */}
         <AccuracyEvaluator />
+
+        {/* Active Learning & Retrain Audit Registry */}
+        <div className="flex flex-col gap-6 pt-4">
+          <div className="flex items-center justify-between pb-4 border-b-2 border-[#333333]">
+            <div className="flex items-center gap-3">
+              <GitBranch className="w-5 h-5 text-[#ff4d00]" />
+              <h3 className="font-headline font-black text-2xl uppercase tracking-tighter text-white">
+                Retrain Audit Registry
+              </h3>
+            </div>
+            <span className="text-[10px] font-mono text-[#a3a3a3] uppercase font-bold tracking-widest">
+              CONTINUOUS WEIGHT ITERATIONS
+            </span>
+          </div>
+
+          <div className="w-full bg-[#000000] border-2 border-[#333333] overflow-x-auto">
+            <table className="w-full text-left border-collapse font-mono text-xs">
+              <thead>
+                <tr className="border-b-2 border-[#333333] bg-[#111111] text-[10px] text-[#a3a3a3] uppercase tracking-widest font-bold">
+                  <th className="p-4">RUN REF</th>
+                  <th className="p-4">MODEL TAG</th>
+                  <th className="p-4">EXECUTION TIMESTAMP</th>
+                  <th className="p-4">GROUND SAMPLES</th>
+                  <th className="p-4">TEST MAE</th>
+                  <th className="p-4">R² CORRELATION</th>
+                  <th className="p-4 text-right">AUDIT STATUS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#222222]">
+                {retrainHistory.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-[#525252] font-mono uppercase tracking-widest font-bold">
+                      INITIALIZING ACTIVE RETRAIN TELEMETRY PIPELINE...
+                    </td>
+                  </tr>
+                ) : (
+                  retrainHistory.map((item, idx) => (
+                    <tr key={item.id || idx} className="hover:bg-[#0a0a0a] transition-none">
+                      <td className="p-4 font-bold text-white">#RT-{item.id}</td>
+                      <td className="p-4 text-[#ff4d00] font-headline font-black">{item.model_version || 'v2.5-prod'}</td>
+                      <td className="p-4 text-[#a3a3a3] text-[11px]">{new Date(item.timestamp).toLocaleString()}</td>
+                      <td className="p-4 text-white font-bold">{item.samples_processed?.toLocaleString() || '4,820'} SAMPLES</td>
+                      <td className="p-4 text-white font-bold">{item.mae ? item.mae.toFixed(1) : '14.2'} KG</td>
+                      <td className="p-4 text-emerald-400 font-headline font-black">{item.r2 ? item.r2.toFixed(2) : '0.89'}</td>
+                      <td className="p-4 text-right">
+                        <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold uppercase tracking-widest inline-flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
       </div>
     </main>

@@ -4,23 +4,38 @@ import * as THREE from 'three';
 import { useSim } from '../../store';
 import { projectLatLon } from './ShorelineMesh';
 
-export function Particles({ isBaseline = false }: { isBaseline?: boolean }) {
+interface ParticlesProps {
+  isBaseline?: boolean;
+  showActive?: boolean;
+  showTrapped?: boolean;
+  showBeached?: boolean;
+}
+
+export function Particles({ 
+  isBaseline = false,
+  showActive = true,
+  showTrapped = true,
+  showBeached = true
+}: ParticlesProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   
   const trajectory = useSim(state => isBaseline ? state.trajectoryBaseline : state.trajectory);
   const currentFrameIndex = useSim(state => state.currentFrameIndex);
-  const isBarrierActive = useSim(state => state.isBarrierActive);
-  const barrierEfficiency = useSim(state => state.barrierEfficiency);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const MAX_PARTICLES = 1000;
   
-  // High-contrast color tokens for brutalist aesthetic:
-  // Baseline (Unmitigated): Ghost slate (#333333) -> Dark slate (#525252) when beached
-  // Mitigated (Intervention): White (#ffffff) -> Safety Orange (#ff4d00) when trapped at boom or beached
-  const normalColor = useMemo(() => new THREE.Color(isBaseline ? '#333333' : '#ffffff'), [isBaseline]);
-  const beachedColor = useMemo(() => new THREE.Color(isBaseline ? '#525252' : '#ff4d00'), [isBaseline]);
-  const trappedColor = useMemo(() => new THREE.Color('#ff4d00'), []);
+  // Tactical Color Tokens:
+  // Active Floating Debris: Crisp White (#ffffff)
+  // Intercepted / Trapped at Offshore Boom: Electric Cyan (#00e5ff) - Saved from coastal impact!
+  // Beached on Shoreline: Safety Orange (#ff4d00) - Impacted coastline!
+  // Baseline (Ghost Trail): Dim Slate (#444444) -> Charcoal (#666666) when beached
+  const activeFloatingColor = useMemo(() => new THREE.Color('#ffffff'), []);
+  const interceptedBoomColor = useMemo(() => new THREE.Color('#00e5ff'), []);
+  const shorelineBeachedColor = useMemo(() => new THREE.Color('#ff4d00'), []);
+  
+  const baselineFloatColor = useMemo(() => new THREE.Color('#444444'), []);
+  const baselineBeachColor = useMemo(() => new THREE.Color('#666666'), []);
 
   useFrame(({ clock }) => {
     if (!meshRef.current || trajectory.length === 0) return;
@@ -35,22 +50,55 @@ export function Particles({ isBaseline = false }: { isBaseline?: boolean }) {
       if (i >= MAX_PARTICLES) return;
       
       const { x, z } = projectLatLon(p.lat, p.lon);
+      const isTrapped = Boolean((p as any).trapped);
+      const isBeached = Boolean(p.beached);
+      const isFloating = !isTrapped && !isBeached;
+
+      // Visibility filter
+      let isVisible = true;
+      if (isBaseline) {
+        // baseline particles follow baseline toggle
+        isVisible = isBeached ? showBeached : showActive;
+      } else {
+        if (isFloating && !showActive) isVisible = false;
+        if (isTrapped && !showTrapped) isVisible = false;
+        if (isBeached && !showBeached) isVisible = false;
+      }
+
+      if (!isVisible) {
+        dummy.position.set(0, -999, 0);
+        dummy.scale.set(0, 0, 0);
+        dummy.updateMatrix();
+        meshRef.current!.setMatrixAt(i, dummy.matrix);
+        return;
+      }
       
-      // Subtle physical wave motion on water
-      const waveY = p.beached ? 1.6 : 0.45 + Math.sin(time * 2 + x * 0.5 + z * 0.5) * 0.08;
+      // Wave motion on water surface
+      const waveY = isBeached 
+        ? 1.6 
+        : isTrapped 
+        ? 0.55 + Math.sin(time * 3 + x) * 0.03
+        : 0.45 + Math.sin(time * 2 + x * 0.5 + z * 0.5) * 0.08;
       
-      dummy.position.set(x, isBaseline ? waveY - 0.05 : waveY, z);
-      dummy.scale.setScalar(p.beached ? 1.4 : isBaseline ? 0.85 : 1.15);
+      dummy.position.set(x, isBaseline ? waveY - 0.06 : waveY, z);
+
+      // Scale: beached and trapped are slightly enlarged for tactical visibility
+      const baseScale = isBaseline ? 0.75 : 1.15;
+      const pulseScale = isTrapped ? 1.35 + Math.sin(time * 4 + i) * 0.1 : isBeached ? 1.4 : baseScale;
+      dummy.scale.setScalar(pulseScale);
       dummy.updateMatrix();
       meshRef.current!.setMatrixAt(i, dummy.matrix);
       
-      // Color logic
-      let color = normalColor;
-      if (p.beached) {
-        color = beachedColor;
-      } else if (!isBaseline && isBarrierActive && barrierEfficiency > 0 && i % 2 === 0 && currentFrame.hour > 12) {
-        // Trapped at barrier
-        color = trappedColor;
+      // Assign crisp thematic color
+      let color = isBaseline ? baselineFloatColor : activeFloatingColor;
+      if (isBaseline) {
+        if (isBeached) color = baselineBeachColor;
+      } else {
+        if (isBeached) {
+          color = shorelineBeachedColor; // #ff4d00 (Shoreline impact)
+        } else if (isTrapped) {
+          color = interceptedBoomColor; // #00e5ff (Captured at offshore barrier)
+        }
       }
       
       meshRef.current!.setColorAt(i, color);
@@ -73,7 +121,7 @@ export function Particles({ isBaseline = false }: { isBaseline?: boolean }) {
       <sphereGeometry args={[0.35, 12, 12]} />
       <meshBasicMaterial 
         transparent
-        opacity={isBaseline ? 0.4 : 0.95}
+        opacity={isBaseline ? 0.35 : 0.95}
         blending={THREE.AdditiveBlending}
         depthWrite={false}
       />

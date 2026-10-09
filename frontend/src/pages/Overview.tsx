@@ -21,6 +21,7 @@ import { FleetCommandPanel } from '../components/FleetCommandPanel';
 import { DebrisAnalysisPanel } from '../components/DebrisAnalysisPanel';
 import { useLiveFeed } from '../hooks/useLiveFeed';
 import { api } from '../lib/api';
+import { useSim } from '../store';
 
 interface TelemetrySummary {
   predicted_debris: number;
@@ -48,6 +49,8 @@ const Overview = () => {
   const [isAnalysisOpen, setIsAnalysisOpen] = useState(false);
   const [selectedActivityId, setSelectedActivityId] = useState<string | undefined>();
   const [selectedBeach, setSelectedBeach] = useState<any>(null);
+  const activeMission = useSim(state => state.activeMission);
+  const setActiveMissionZone = useSim(state => state.setActiveMissionZone);
 
   const { data: liveData, isConnected } = useLiveFeed('ws://localhost:8000/ws/live');
 
@@ -339,8 +342,12 @@ const Overview = () => {
           >
             <div className="absolute inset-0 z-0">
               <IntelligenceMap 
-                onSelectBeach={(beach) => setSelectedBeach(beach)} 
-                selectedBeachId={selectedBeach?.id} 
+                onSelectBeach={(beach) => {
+                  setSelectedBeach(beach);
+                  setActiveMissionZone(beach.id);
+                }} 
+                selectedBeachId={selectedBeach?.id || activeMission?.zoneId} 
+                activeLayers={activeLayers}
               />
             </div>
 
@@ -357,12 +364,12 @@ const Overview = () => {
             <div className="relative z-10 mt-auto p-6 flex flex-col md:flex-row justify-between gap-4 pointer-events-none font-mono text-[10px] font-bold uppercase tracking-widest">
               <div className="px-4 py-3 bg-black border border-[#333333] text-white flex flex-col gap-1 pointer-events-auto">
                 <span className="text-[#a3a3a3]">
-                  {selectedBeach ? `TARGET: ${selectedBeach.name.toUpperCase()}` : 'TARGET ACQUIRED:'}
+                  {selectedBeach ? `TARGET: ${selectedBeach.name.toUpperCase()}` : `TARGET: ${activeMission?.zoneName?.toUpperCase() || 'VERSOVA CREEK'}`}
                 </span>
                 <span className="text-[#ff4d00]">
                   {selectedBeach 
                     ? `${selectedBeach.lat.toFixed(4)}° N, ${selectedBeach.lon.toFixed(4)}° E • ${selectedBeach.baseline_risk}% RISK`
-                    : '19.1350° N, 72.8140° E • VERSOVA SECTOR'}
+                    : `${activeMission?.lat?.toFixed(4) || '19.1350'}° N, ${activeMission?.lon?.toFixed(4) || '72.8140'}° E • ${activeMission?.riskScore || 94}% RISK`}
                 </span>
               </div>
               <div className="px-4 py-3 bg-black border border-[#333333] flex gap-4 pointer-events-auto">

@@ -41,33 +41,33 @@ export function BarrierMesh() {
       {/* Floating Boom Tube */}
       <mesh geometry={tubeGeometry}>
         <meshStandardMaterial 
-          color="#f59e0b" 
-          roughness={0.4} 
-          metalness={0.6}
-          emissive="#b45309"
-          emissiveIntensity={0.3}
+          color="#ff4d00" 
+          roughness={0.3} 
+          metalness={0.7}
+          emissive="#ff4d00"
+          emissiveIntensity={0.35}
         />
       </mesh>
 
       {/* Floating Beacon Buoys along the barrier */}
-      {barrierPoints.filter((_, i) => i % 5 === 0).map((pt, idx) => (
+      {barrierPoints.filter((_, i) => i % 4 === 0).map((pt, idx) => (
         <group key={idx} position={[pt.x, 0.5, pt.z]}>
           <mesh>
-            <cylinderGeometry args={[0.3, 0.3, 0.8, 8]} />
-            <meshStandardMaterial color="#f59e0b" />
+            <cylinderGeometry args={[0.25, 0.25, 0.7, 8]} />
+            <meshStandardMaterial color={idx % 2 === 0 ? "#ffffff" : "#ff4d00"} />
           </mesh>
-          <mesh position={[0, 0.5, 0]}>
+          <mesh position={[0, 0.45, 0]}>
             <sphereGeometry args={[0.15, 8, 8]} />
-            <meshBasicMaterial color="#ffedd5" />
+            <meshBasicMaterial color="#ffffff" />
           </mesh>
         </group>
       ))}
 
       {/* Barrier Active Label */}
       <Html distanceFactor={50} position={[midPoint.x, 1.8, midPoint.z]} center pointerEvents="none">
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[#08131e]/95 backdrop-blur-md border border-amber-500/50 text-[10px] font-mono whitespace-nowrap shadow-2xl">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-          <span className="text-amber-300 font-bold">Defensive Boom Active ({barrierEfficiency}% Deflection)</span>
+        <div className="flex items-center gap-1.5 px-3 py-1 bg-black border-2 border-[#ff4d00] text-[9px] font-mono uppercase font-bold tracking-widest text-white shadow-2xl">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#ff4d00] animate-pulse"></span>
+          <span>OFFSHORE BOOM: {barrierEfficiency}% CAPTURE</span>
         </div>
       </Html>
     </group>

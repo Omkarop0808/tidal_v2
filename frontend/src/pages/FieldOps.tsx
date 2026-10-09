@@ -8,6 +8,7 @@ import {
   Square
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useSim } from '../store';
 
 export default function FieldOps() {
   const [beaches, setBeaches] = useState<any[]>([]);
@@ -32,7 +33,9 @@ export default function FieldOps() {
       ]);
       setBeaches(bList);
       if (bList.length > 0 && !selectedBeach) {
-        setSelectedBeach(bList[0]);
+        const activeZoneId = useSim.getState().activeMission?.zoneId;
+        const matched = bList.find((b: any) => b.id.toLowerCase() === activeZoneId?.toLowerCase());
+        setSelectedBeach(matched || bList[0]);
       }
     } catch (err) {
       console.error('Failed to load field ops data:', err);

@@ -38,57 +38,76 @@ export const Simulate = () => {
   const trajectoryBaseline = useSim(state => state.trajectoryBaseline);
   const currentFrameIndex = useSim(state => state.currentFrameIndex);
   const isPlaying = useSim(state => state.isPlaying);
+  const playbackSpeed = useSim(state => state.playbackSpeed);
+  const cameraView = useSim(state => state.cameraView);
   
   const setSelectedLocation = useSim(state => state.setSelectedLocation);
   const setScenario = useSim(state => state.setScenario);
   const setCurrentFrame = useSim(state => state.setCurrentFrame);
   const togglePlay = useSim(state => state.togglePlay);
+  const setIsPlaying = useSim(state => state.setIsPlaying);
+  const setPlaybackSpeed = useSim(state => state.setPlaybackSpeed);
+  const setCameraView = useSim(state => state.setCameraView);
 
   const [isLoading, setIsLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+
+  // 3D Visual Layer Toggles
+  const [showBaseline, setShowBaseline] = useState(true);
+  const [showActive, setShowActive] = useState(true);
+  const [showTrapped, setShowTrapped] = useState(true);
+  const [showBeached, setShowBeached] = useState(true);
+  const [showForceVectors, setShowForceVectors] = useState(true);
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isPlaying && trajectory.length > 0) {
+      const stepMs = Math.max(120, Math.round(500 / (playbackSpeed || 1)));
       interval = setInterval(() => {
         setCurrentFrame((currentFrameIndex + 1) % trajectory.length);
-      }, 450);
+      }, stepMs);
     }
     return () => clearInterval(interval);
-  }, [isPlaying, currentFrameIndex, trajectory.length, setCurrentFrame]);
+  }, [isPlaying, currentFrameIndex, trajectory.length, setCurrentFrame, playbackSpeed]);
 
   const runSimulation = useCallback(async () => {
     setIsLoading(true);
     try {
       const payload = {
-        wind_speed: windSpeed,
-        rainfall_increase: precipitation,
-        barrier_efficiency: isBarrierActive ? barrierEfficiency : 0,
-        cleanup_teams: cleanupTeams,
-        lat: selectedLocation.lat,
-        lon: selectedLocation.lon
+        wind_speed: Number(windSpeed) || 0,
+        rainfall_increase: Number(precipitation) || 0,
+        barrier_efficiency: Number(isBarrierActive ? barrierEfficiency : 0),
+        cleanup_teams: Math.max(1, Number(cleanupTeams) || 4),
+        is_barrier_active: Boolean(isBarrierActive),
+        lat: Number(selectedLocation.lat),
+        lon: Number(selectedLocation.lon)
       };
       
       await runSimulationMiddleware(payload);
+      setCurrentFrame(0);
+      setIsPlaying(true);
+      setToastMessage(`MONTE CARLO EXECUTION COMPLETE // T+0H TO T+72H STREAMING`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3500);
     } catch (error) {
       console.error('Simulation run failed:', error);
+      setToastMessage(`SIMULATION LINK OFFLINE // VERIFYING TELEMETRY`);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3500);
     } finally {
       setIsLoading(false);
     }
-  }, [windSpeed, precipitation, barrierEfficiency, isBarrierActive, cleanupTeams, selectedLocation.lat, selectedLocation.lon]);
+  }, [windSpeed, precipitation, barrierEfficiency, isBarrierActive, cleanupTeams, selectedLocation.lat, selectedLocation.lon, setCurrentFrame, setIsPlaying]);
 
   useEffect(() => {
-    if (trajectory.length === 0) {
-      runSimulation();
-    }
-  }, [runSimulation, trajectory.length]);
+    runSimulation();
+  }, [selectedLocation.id]);
 
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const loc = OUTFALL_LOCATIONS.find(l => l.id === e.target.value) || OUTFALL_LOCATIONS[0];
     setSelectedLocation(loc);
   };
-
-  const [toastMessage, setToastMessage] = useState('');
 
   const handleSaveScenario = () => {
     const payload = {
@@ -402,6 +421,20 @@ export const Simulate = () => {
               </p>
             </div>
 
+            {/* Physical Simulation Engine Contract & Model Assumptions */}
+            <div className="p-6 bg-[#080808] border-t-2 border-[#333333] flex flex-col gap-3 font-mono text-[9px] uppercase tracking-wider">
+              <div className="flex items-center justify-between border-b border-[#222222] pb-2 text-[#737373]">
+                <span className="text-white font-bold">PHYSICAL SIMULATION CONTRACT</span>
+                <span className="text-[#ff4d00]">RK4 ADVECTION // 72H</span>
+              </div>
+              <div className="text-[#a3a3a3] leading-relaxed flex flex-col gap-1.5">
+                <div><strong>ADVECTION:</strong> 4th-order Runge-Kutta numerical integration under 2D coastal Eulerian velocity vectors + 3% surface windage slip coefficient.</div>
+                <div><strong>DISPERSION:</strong> Stochastic Brownian diffusion term with isotropic diffusivity coefficient D = 2.5 m²/s.</div>
+                <div><strong>OFFSHORE BOOM:</strong> Semi-circular 800m seaward perimeter; intercepted particles are pinned to the barrier arc based on parameterized capture efficiency ({isBarrierActive ? barrierEfficiency : 0}%).</div>
+                <div className="text-[#737373] text-[8px] pt-1 border-t border-[#1a1a1a]">*Model operates as a 2D surface layer simulation. 3D vertical water-column mixing and microplastic bio-fouling sedimentation are not modeled in this release.</div>
+              </div>
+            </div>
+
           </div>
 
         </div>
@@ -412,40 +445,147 @@ export const Simulate = () => {
           <div className="relative w-full h-[640px] lg:h-[700px] min-h-[600px] bg-[#000000] flex flex-col">
             
             <div className="absolute inset-0 z-0 opacity-100">
-              <Scene />
+              <Scene 
+                showBaseline={showBaseline}
+                showActive={showActive}
+                showTrapped={showTrapped}
+                showBeached={showBeached}
+                showForceVectors={showForceVectors}
+              />
             </div>
             
-            <div className="absolute top-4 left-4 z-30 max-w-[250px] bg-black/90 border border-[#333333] border-l-4 border-l-[#ff4d00] p-3 pointer-events-none shadow-xl">
-              <h4 className="text-[#ff4d00] font-headline font-black text-xs uppercase tracking-tighter mb-1">Purpose & Objective</h4>
-              <p className="text-[9px] font-mono text-[#e5e5e5] uppercase tracking-widest leading-relaxed">
-                Simulates Monte-Carlo hydrodynamic drift to forecast shoreline beaching impact and guide fleet countermeasure placement.
-              </p>
+            {/* Top Left: Purpose & Real-time Particle Analytics */}
+            <div className="absolute top-4 left-4 z-30 flex flex-col gap-2 max-w-[280px] pointer-events-none">
+              <div className="bg-black/95 border border-[#333333] border-l-4 border-l-[#ff4d00] p-3 shadow-2xl">
+                <h4 className="text-[#ff4d00] font-headline font-black text-xs uppercase tracking-tighter mb-1">Purpose & Objective</h4>
+                <p className="text-[9px] font-mono text-[#e5e5e5] uppercase tracking-widest leading-relaxed">
+                  Simulates Monte-Carlo hydrodynamic drift to forecast shoreline beaching impact and guide fleet countermeasure placement.
+                </p>
+              </div>
+
+              {/* Dynamic Particle Status HUD */}
+              <div className="bg-black/95 border border-[#333333] p-2.5 shadow-2xl font-mono text-[9px] uppercase tracking-wider flex flex-col gap-1.5 pointer-events-auto">
+                <div className="flex items-center justify-between border-b border-[#222222] pb-1 text-[#a3a3a3] font-bold">
+                  <span>TELEMETRY (T+{activeFrame.hour}H)</span>
+                  <span className="text-white">{activeFrame.particles?.length || 0} PARTICLES</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-white font-bold">
+                    <span className="w-2 h-2 bg-white rounded-full"></span>
+                    FLOATING DEBRIS
+                  </span>
+                  <span className="text-white font-bold">
+                    {activeFrame.particles ? Math.max(0, 100 - Math.round(((activeFrame.particles.filter((p: any) => p.trapped).length + activeFrame.particles.filter((p: any) => p.beached).length) / Math.max(1, activeFrame.particles.length)) * 100)) : 100}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[#00e5ff] font-bold">
+                    <span className="w-2 h-2 bg-[#00e5ff] rounded-full animate-pulse"></span>
+                    INTERCEPTED AT BOOM
+                  </span>
+                  <span className="text-[#00e5ff] font-bold">
+                    {activeFrame.particles ? Math.round((activeFrame.particles.filter((p: any) => p.trapped).length / Math.max(1, activeFrame.particles.length)) * 100) : 0}% [DEFENDED]
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[#ff4d00] font-bold">
+                    <span className="w-2 h-2 bg-[#ff4d00] rounded-full"></span>
+                    BEACHED ON SHORE
+                  </span>
+                  <span className="text-[#ff4d00] font-bold">
+                    {activeFrame.particles ? Math.round((activeFrame.particles.filter((p: any) => p.beached).length / Math.max(1, activeFrame.particles.length)) * 100) : 0}%
+                  </span>
+                </div>
+              </div>
             </div>
             
-            <div className="relative z-20 p-6 flex items-center justify-between pointer-events-none">
-              <div className="flex items-center gap-3 px-4 py-2 bg-black text-[10px] font-mono text-white font-bold tracking-widest uppercase border-2 border-[#333333] pointer-events-auto">
-                <Square className="w-3 h-3 fill-white" />
-                <span>MUMBAI TWIN</span>
+            <div className="relative z-20 p-6 flex flex-wrap items-center justify-between gap-3 pointer-events-none">
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 px-4 py-2 bg-black text-[10px] font-mono text-white font-bold tracking-widest uppercase border-2 border-[#333333] pointer-events-auto">
+                  <Square className="w-3 h-3 fill-white" />
+                  <span>MUMBAI TWIN</span>
+                </div>
+
+                {/* Camera View Switcher */}
+                <div className="flex items-center bg-black/90 border-2 border-[#333333] p-1 font-mono text-[9px] uppercase pointer-events-auto">
+                  <span className="text-[#a3a3a3] px-2 font-bold">CAM:</span>
+                  {(['perspective', 'topDown', 'shoreline'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setCameraView(mode)}
+                      className={`px-3 py-1 font-bold transition-none ${
+                        cameraView === mode 
+                          ? 'bg-white text-black font-headline font-black' 
+                          : 'text-[#a3a3a3] hover:text-white hover:bg-[#222222]'
+                      }`}
+                    >
+                      {mode === 'perspective' ? '45° OBLIQUE' : mode === 'topDown' ? '90° NADIR' : '15° COASTAL'}
+                    </button>
+                  ))}
+                </div>
               </div>
               
-              <div className="flex items-center gap-4 px-4 py-2 bg-black text-[10px] font-mono border-2 border-[#333333] pointer-events-auto font-bold uppercase tracking-widest">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-[#333333]"></span>
-                  <span className="text-[#a3a3a3]">BASELINE (GHOST DOTS)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-white"></span>
-                  <span className="text-white">MITIGATED (ACTIVE)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 bg-[#ff4d00]"></span>
-                  <span className="text-[#ff4d00]">TRAPPED / BEACHED</span>
-                </div>
+              {/* Interactive Layer Toggles Legend */}
+              <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 bg-black/95 text-[9px] font-mono border-2 border-[#333333] pointer-events-auto font-bold uppercase tracking-wider shadow-2xl">
+                <button
+                  onClick={() => setShowBaseline(prev => !prev)}
+                  title="Toggle Baseline Ghost Trajectory"
+                  className={`flex items-center gap-1.5 px-2 py-1 transition-none border ${
+                    showBaseline ? 'border-[#525252] text-[#a3a3a3] bg-[#111111]' : 'border-transparent text-[#444444] opacity-50'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 bg-[#444444] border border-[#666666]"></span>
+                  <span>BASELINE (GHOST)</span>
+                </button>
+
+                <button
+                  onClick={() => setShowActive(prev => !prev)}
+                  title="Toggle Active Floating Plastic Particles"
+                  className={`flex items-center gap-1.5 px-2 py-1 transition-none border ${
+                    showActive ? 'border-white text-white bg-[#111111]' : 'border-transparent text-[#444444] opacity-50'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 bg-white border border-white"></span>
+                  <span>FLOATING DEBRIS</span>
+                </button>
+
+                <button
+                  onClick={() => setShowTrapped(prev => !prev)}
+                  title="Toggle Debris Intercepted at Offshore Boom"
+                  className={`flex items-center gap-1.5 px-2 py-1 transition-none border ${
+                    showTrapped ? 'border-[#00e5ff] text-[#00e5ff] bg-[#111111]' : 'border-transparent text-[#444444] opacity-50'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 bg-[#00e5ff] border border-white"></span>
+                  <span>INTERCEPTED (BOOM)</span>
+                </button>
+
+                <button
+                  onClick={() => setShowBeached(prev => !prev)}
+                  title="Toggle Debris Beached on Shoreline"
+                  className={`flex items-center gap-1.5 px-2 py-1 transition-none border ${
+                    showBeached ? 'border-[#ff4d00] text-[#ff4d00] bg-[#111111]' : 'border-transparent text-[#444444] opacity-50'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 bg-[#ff4d00] border border-white"></span>
+                  <span>BEACHED ON SHORE</span>
+                </button>
+
+                <button
+                  onClick={() => setShowForceVectors(prev => !prev)}
+                  title="Toggle Current & Wind Flow Vectors"
+                  className={`flex items-center gap-1.5 px-2 py-1 transition-none border ${
+                    showForceVectors ? 'border-[#333333] text-white bg-[#111111]' : 'border-transparent text-[#444444] opacity-50'
+                  }`}
+                >
+                  <span className="w-2.5 h-2.5 border border-white/60 flex items-center justify-center text-[7px] text-white">▲</span>
+                  <span>FLOW VECTORS</span>
+                </button>
               </div>
             </div>
             
             <div className="relative z-20 mt-auto p-6 m-4 bg-black border-2 border-white flex flex-col gap-4">
-              <div className="flex items-center justify-between text-[10px] font-mono uppercase font-bold tracking-widest">
+              <div className="flex flex-wrap items-center justify-between gap-4 text-[10px] font-mono uppercase font-bold tracking-widest">
                 <div className="flex items-center gap-4">
                   <button 
                     onClick={togglePlay}
@@ -458,10 +598,30 @@ export const Simulate = () => {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3 text-[#a3a3a3]">
-                  <span>
-                    FRAME: {currentFrameIndex + 1} / {trajectory.length || 13}
-                  </span>
+                <div className="flex items-center gap-4">
+                  {/* Playback Speed Multipliers */}
+                  <div className="flex items-center bg-[#111111] border border-[#333333] p-1 gap-1">
+                    <span className="text-[#737373] text-[9px] px-1 font-bold">SPEED:</span>
+                    {[0.5, 1, 2, 4].map(spd => (
+                      <button
+                        key={spd}
+                        onClick={() => setPlaybackSpeed(spd)}
+                        className={`px-2 py-0.5 text-[9px] font-mono font-bold transition-none ${
+                          playbackSpeed === spd 
+                            ? 'bg-[#ff4d00] text-black font-headline font-black' 
+                            : 'text-[#a3a3a3] hover:text-white'
+                        }`}
+                      >
+                        {spd}X
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="text-[#a3a3a3]">
+                    <span>
+                      FRAME: {currentFrameIndex + 1} / {trajectory.length || 13}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -474,12 +634,30 @@ export const Simulate = () => {
                   onChange={(e) => { setCurrentFrame(Number(e.target.value)); if (isPlaying) togglePlay(); }}
                   className="w-full accent-white" 
                 />
-                <div className="flex justify-between text-[9px] text-[#525252] font-mono font-bold uppercase tracking-widest pt-1">
-                  <span>T+0H REL</span>
-                  <span>T+18H SURGE</span>
-                  <span className="text-white">T+36H PEAK</span>
-                  <span>T+54H DEFL</span>
-                  <span>T+72H END</span>
+                <div className="flex justify-between text-[9px] font-mono font-bold uppercase tracking-widest pt-1">
+                  {[
+                    { label: 'T+0H REL', index: 0 },
+                    { label: 'T+18H SURGE', index: 3 },
+                    { label: 'T+36H PEAK', index: 6 },
+                    { label: 'T+54H DEFL', index: 9 },
+                    { label: 'T+72H END', index: 12 },
+                  ].map(anchor => (
+                    <button
+                      key={anchor.label}
+                      onClick={() => {
+                        if (trajectory.length > anchor.index) {
+                          setCurrentFrame(anchor.index);
+                        }
+                      }}
+                      className={`hover:underline cursor-pointer transition-none ${
+                        currentFrameIndex === anchor.index 
+                          ? 'text-[#ff4d00] font-headline font-black underline' 
+                          : 'text-[#737373] hover:text-white'
+                      }`}
+                    >
+                      {anchor.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>

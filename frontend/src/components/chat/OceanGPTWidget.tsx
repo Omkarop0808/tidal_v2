@@ -5,8 +5,10 @@ import {
   X, 
   Bot, 
   User,
-  Square
+  Square,
+  AlertTriangle
 } from 'lucide-react';
+import { useSim } from '../../store';
 
 interface Message {
   id: string;
@@ -17,10 +19,12 @@ interface Message {
 const suggestedPrompts = [
   "BEACHING RISK AT VERSOVA?",
   "HUNGARIAN FLEET OPTIMIZER?",
-  "EXPLAIN DRIFT MODEL."
+  "EXPLAIN DRIFT MODEL.",
+  "CHECK EPR CERTIFICATES"
 ];
 
 export const OceanGPTWidget = () => {
+  const activeMission = useSim(state => state.activeMission);
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { id: '1', sender: 'bot', text: "WELCOME TO TIDAL TACTICAL COMMAND. I AM OCEAN-GPT, YOUR MARITIME INTELLIGENCE COPILOT. AWAITING QUERY." }
@@ -99,6 +103,27 @@ export const OceanGPTWidget = () => {
 
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-black">
+            {activeMission && (
+              <div className="p-3 bg-[#111111] border-2 border-[#ff4d00] flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between text-[9px] font-mono font-bold uppercase tracking-widest text-[#ff4d00]">
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    TACTICAL ADVISORY // {activeMission.zoneName.split(' ')[0].toUpperCase()}
+                  </span>
+                  <span className="bg-[#ff4d00] text-black px-1.5 py-0.5">{activeMission.riskScore}% RISK</span>
+                </div>
+                <p className="text-[9px] font-mono text-[#a3a3a3] uppercase leading-relaxed font-bold">
+                  PREDICTED INFLOW: <strong className="text-white">{activeMission.debrisKg} KG</strong>. SQUAD COUNTERMEASURES ENGAGED.
+                </p>
+                <button
+                  onClick={() => sendMessage(`WHAT IS THE OPTIMAL INTERCEPTION STRATEGY FOR ${activeMission.zoneName.split(' ')[0].toUpperCase()}?`)}
+                  className="self-start text-[8px] font-mono text-black bg-white hover:bg-[#ff4d00] px-2 py-1 font-bold uppercase tracking-wider flex items-center gap-1 transition-none"
+                >
+                  <span>QUERY MITIGATION →</span>
+                </button>
+              </div>
+            )}
+
             {messages.map((msg) => {
               const isUser = msg.sender === 'user';
               return (

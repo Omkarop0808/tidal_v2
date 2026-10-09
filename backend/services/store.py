@@ -131,7 +131,59 @@ class StoreService:
             image_path TEXT
         )
         ''')
+
+        # 6. Circular Material Recovery Manifests
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS circular_manifests (
+            id TEXT PRIMARY KEY,
+            task_id TEXT,
+            beach_id TEXT,
+            beach_name TEXT,
+            plastic_mass_kg REAL NOT NULL,
+            composition TEXT,
+            gross_valuation_inr REAL,
+            co2e_avoided_kg REAL,
+            epr_credits INTEGER,
+            upcycler_facility TEXT,
+            status TEXT DEFAULT 'PENDING_VALUATION',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            signed_at DATETIME
+        )
+        ''')
+
+        cursor.execute("SELECT COUNT(*) FROM circular_manifests")
+        if cursor.fetchone()[0] == 0:
+            sample_manifests = [
+                ("MNF-7C91B4", "TASK-J71A29", "juhu", "Juhu Beach", 310.0, "High-Density Polyethylene (HDPE) & Rigid Plastics", 10850.0, 558.0, 372, "Lucro Plastecycle Pvt Ltd", "MANIFEST_ISSUED", (datetime.now() - timedelta(hours=14)).isoformat(), (datetime.now() - timedelta(hours=13)).isoformat()),
+                ("MNF-4A82F1", "TASK-V82B14", "versova", "Versova Creek", 420.0, "Polyethylene Terephthalate (PET) & Ghost Fishing Line", 14700.0, 756.0, 504, "Lucro Plastecycle Pvt Ltd", "DISPATCHED_TO_UPCYCLER", (datetime.now() - timedelta(hours=28)).isoformat(), (datetime.now() - timedelta(hours=26)).isoformat()),
+                ("MNF-1E33D9", "TASK-M19C88", "mahim", "Mahim Bay", 520.0, "Mixed Urban Rigid Polymers & Micro-Debris", 18200.0, 936.0, 624, "Shakti Plastic Industries", "MANIFEST_ISSUED", (datetime.now() - timedelta(hours=48)).isoformat(), (datetime.now() - timedelta(hours=47)).isoformat()),
+            ]
+            for sm in sample_manifests:
+                cursor.execute('''
+                INSERT INTO circular_manifests (id, task_id, beach_id, beach_name, plastic_mass_kg, composition, gross_valuation_inr, co2e_avoided_kg, epr_credits, upcycler_facility, status, created_at, signed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', sm)
+
+        # 7. Model Retrain Audit History
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS model_retrain_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            mae REAL,
+            r2 REAL,
+            samples_processed INTEGER,
+            model_version TEXT DEFAULT 'v2.5-prod',
+            status TEXT DEFAULT 'SUCCESS'
+        )
+        ''')
         
+        cursor.execute("SELECT COUNT(*) FROM model_retrain_history")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('''
+            INSERT INTO model_retrain_history (timestamp, mae, r2, samples_processed, model_version, status)
+            VALUES (?, 14.2, 0.89, 4820, 'v2.5-prod', 'SUCCESS')
+            ''', ((datetime.now() - timedelta(days=2)).isoformat(),))
+
         conn.commit()
         conn.close()
 
@@ -225,9 +277,64 @@ class StoreService:
         VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (beach_id, beach_name, predicted, collected_kg, abs_error, accuracy, now_iso))
 
+        # 4. Auto-Queue Pending Circular Material Batch for Upcycler Valuation
+        manifest_id = f"MNF-{uuid.uuid4().hex[:6].upper()}"
+        gross_val = round(collected_kg * 35.0, 2)
+        co2e = round(collected_kg * 1.8, 1)
+        epr = int(collected_kg * 1.2)
+        cursor.execute('''
+        INSERT INTO circular_manifests (id, task_id, beach_id, beach_name, plastic_mass_kg, composition, gross_valuation_inr, co2e_avoided_kg, epr_credits, upcycler_facility, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'Mixed Recovered Coastal Polymers (PET/HDPE)', ?, ?, ?, 'Lucro Plastecycle Pvt Ltd', 'PENDING_VALUATION', ?)
+        ''', (manifest_id, task_id, beach_id, beach_name, collected_kg, gross_val, co2e, epr, now_iso))
+
         conn.commit()
         conn.close()
         return True
+
+    # --- CIRCULAR MANIFESTS API ---
+    def get_circular_manifests(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM circular_manifests ORDER BY created_at DESC")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
+
+    def sign_circular_manifest(self, manifest_id: str, upcycler_facility: str = "Lucro Plastecycle Pvt Ltd"):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now_iso = datetime.now().isoformat()
+        cursor.execute('''
+        UPDATE circular_manifests
+        SET status = 'MANIFEST_ISSUED', signed_at = ?, upcycler_facility = ?
+        WHERE id = ?
+        ''', (now_iso, upcycler_facility, manifest_id))
+        conn.commit()
+        conn.close()
+        return True
+
+    # --- RETRAIN AUDIT API ---
+    def record_retrain(self, metrics: dict, samples_processed: int):
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now_iso = datetime.now().isoformat()
+        cursor.execute('''
+        INSERT INTO model_retrain_history (timestamp, mae, r2, samples_processed, model_version, status)
+        VALUES (?, ?, ?, ?, 'v2.5-prod', 'SUCCESS')
+        ''', (now_iso, float(metrics.get("mae", 14.0)), float(metrics.get("r2", 0.90)), samples_processed))
+        conn.commit()
+        conn.close()
+        return True
+
+    def get_retrain_history(self):
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM model_retrain_history ORDER BY timestamp DESC LIMIT 10")
+        rows = [dict(r) for r in cursor.fetchall()]
+        conn.close()
+        return rows
 
     # --- ACCURACY ANALYTICS ---
     def get_accuracy_metrics(self):

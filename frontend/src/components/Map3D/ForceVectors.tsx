@@ -32,13 +32,14 @@ export function ForceVectors() {
         
         const angleOffset = Math.sin(time * 1.5 + x * 0.4 + z * 0.4) * 0.12;
         
+        const heading = (Math.PI / 4) + angleOffset; // SW to NE monsoonal onshore vector
         dummy.position.set(posX, 0.8, posZ);
-        dummy.rotation.set(0, angleOffset + Math.PI / 3.8, 0); // SW towards NE onshore vector
+        dummy.rotation.set(0, heading, 0);
         
-        const scale = 0.35 + (windSpeed / 50);
+        const scale = 0.35 + (windSpeed / 60);
         dummy.scale.set(scale, scale, scale);
         
-        const flowOffset = (time * (windSpeed / 6) + x + z) % spacing;
+        const flowOffset = (time * (windSpeed / 5.5) + x + z) % spacing;
         dummy.translateZ(flowOffset - spacing / 2);
         
         dummy.updateMatrix();
@@ -51,9 +52,9 @@ export function ForceVectors() {
   return (
     <instancedMesh ref={meshRef} args={[geometry, undefined as any, count]}>
       <meshBasicMaterial 
-        color="#00e5ff" 
+        color="#ffffff" 
         transparent 
-        opacity={0.25} 
+        opacity={Math.min(0.5, 0.15 + (windSpeed / 100))} 
         depthWrite={false} 
         blending={THREE.AdditiveBlending} 
       />

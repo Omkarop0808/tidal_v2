@@ -1,12 +1,48 @@
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import { Particles } from './Particles';
 import { ForceVectors } from './ForceVectors';
 import { ShorelineMesh } from './ShorelineMesh';
 import { BarrierMesh } from './BarrierMesh';
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useSim } from '../../store';
 
-export function Scene() {
+interface SceneProps {
+  showBaseline?: boolean;
+  showActive?: boolean;
+  showTrapped?: boolean;
+  showBeached?: boolean;
+  showForceVectors?: boolean;
+}
+
+function CameraManager() {
+  const cameraView = useSim(state => state.cameraView);
+  const { camera } = useThree();
+
+  useEffect(() => {
+    if (cameraView === 'topDown') {
+      camera.position.set(0, 52, 0.01);
+      camera.lookAt(0, 0, 0);
+    } else if (cameraView === 'shoreline') {
+      camera.position.set(-10, 10, 24);
+      camera.lookAt(0, 1.5, 0);
+    } else {
+      // perspective
+      camera.position.set(0, 32, 32);
+      camera.lookAt(0, 0, 0);
+    }
+  }, [cameraView, camera]);
+
+  return null;
+}
+
+export function Scene({
+  showBaseline = true,
+  showActive = true,
+  showTrapped = true,
+  showBeached = true,
+  showForceVectors = true
+}: SceneProps) {
   return (
     <div className="w-full h-full bg-[#000000] relative select-none">
       <Canvas 
@@ -14,6 +50,7 @@ export function Scene() {
         gl={{ antialias: true, alpha: false }}
       >
         <color attach="background" args={['#000000']} />
+        <CameraManager />
         
         <ambientLight intensity={0.65} />
         <directionalLight position={[20, 30, 20]} intensity={1.2} />
@@ -27,11 +64,25 @@ export function Scene() {
           <BarrierMesh />
 
           {/* Hydrodynamic Wind & Current Force Vectors */}
-          <ForceVectors />
+          {showForceVectors && <ForceVectors />}
 
-          {/* Dual-Track Particles: Baseline (Ghost/Coral) vs Mitigated (Cyan/Emerald) */}
-          <Particles isBaseline={true} />
-          <Particles isBaseline={false} />
+          {/* Unmitigated Control Track: Baseline (Ghost Dots) */}
+          {showBaseline && (
+            <Particles 
+              isBaseline={true} 
+              showActive={showActive} 
+              showTrapped={showTrapped} 
+              showBeached={showBeached} 
+            />
+          )}
+
+          {/* Active Intervention Track: Mitigated (White / Cyan / Orange) */}
+          <Particles 
+            isBaseline={false} 
+            showActive={showActive} 
+            showTrapped={showTrapped} 
+            showBeached={showBeached} 
+          />
           
           {/* Oceanic Bathymetric Spatial Grid */}
           <Grid 

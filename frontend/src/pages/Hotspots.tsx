@@ -15,6 +15,7 @@ import InterventionSimulator from '../components/dashboard/InterventionSimulator
 import { DispatchPlanModal } from '../components/dashboard/DispatchPlanModal';
 import FieldCleanupModal from '../components/dashboard/FieldCleanupModal';
 import { api } from '../lib/api';
+import { useSim } from '../store';
 
 const Hotspots = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -22,14 +23,22 @@ const Hotspots = () => {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [selectedZoneIndex, setSelectedZoneIndex] = useState(0);
   const [isFleetDispatched, setIsFleetDispatched] = useState(false);
+  const [activeScenarioId, setActiveScenarioId] = useState<number>(1);
   const [assignments, setAssignments] = useState<any[]>([]);
   const [hotspots, setHotspots] = useState<any[]>(MOCK_HOTSPOTS);
+
+  const setActiveMissionZone = useSim(state => state.setActiveMissionZone);
 
   const fetchHotspotsData = async () => {
     try {
       const data = await api.getHotspots();
       if (data && data.length > 0) {
         setHotspots(data);
+        const activeZoneId = useSim.getState().activeMission?.zoneId;
+        const matchedIdx = data.findIndex((hs: any) => hs.id?.toLowerCase() === activeZoneId?.toLowerCase());
+        if (matchedIdx >= 0) {
+          setSelectedZoneIndex(matchedIdx);
+        }
         const assigns = await api.optimizeDispatch(data);
         setAssignments(assigns || []);
       }
@@ -56,6 +65,14 @@ const Hotspots = () => {
       window.removeEventListener('CleanupCompletedEvent', handleCleanup);
     };
   }, []);
+
+  const handleSelectZone = (index: number) => {
+    setSelectedZoneIndex(index);
+    const hs = hotspots[index];
+    if (hs && hs.id) {
+      setActiveMissionZone(hs.id);
+    }
+  };
 
   const currentBeach = hotspots[selectedZoneIndex] || hotspots[0];
 
@@ -131,7 +148,7 @@ const Hotspots = () => {
           <HotspotRanking 
             hotspots={hotspots}
             selectedZoneIndex={selectedZoneIndex}
-            onSelectZone={setSelectedZoneIndex}
+            onSelectZone={handleSelectZone}
             isFleetDispatched={isFleetDispatched}
           />
         </div>
@@ -139,20 +156,34 @@ const Hotspots = () => {
           <LiveMap 
             hotspots={hotspots}
             selectedZoneIndex={selectedZoneIndex}
-            onSelectZone={setSelectedZoneIndex}
+            onSelectZone={handleSelectZone}
             isFleetDispatched={isFleetDispatched}
           />
         </div>
         <div className="col-span-1 lg:col-span-3 bg-[#000000]">
-          <CleanupOptimization assignments={assignments} />
+          <CleanupOptimization 
+            assignments={assignments} 
+            selectedZone={currentBeach}
+            selectedZoneIndex={selectedZoneIndex}
+            hotspots={hotspots}
+            onSelectZone={handleSelectZone}
+            onDispatchTarget={() => setIsModalOpen(true)}
+          />
         </div>
       </div>
 
-      {/* Comparison Visual: Reactionary vs TIDAL Predictive */}
-      <ComparisonVisual />
+      {/* Comparison Visual: Reactionary vs TIDAL Predictive (Adaptive Deltas) */}
+      <ComparisonVisual 
+        activeScenarioId={activeScenarioId} 
+        selectedZone={currentBeach} 
+      />
 
       {/* Intervention Simulator: Interactive Action Scenarios */}
-      <InterventionSimulator />
+      <InterventionSimulator 
+        activeScenarioId={activeScenarioId}
+        onSelectScenario={setActiveScenarioId}
+        selectedZone={currentBeach}
+      />
 
       {/* Bottom CTA connecting to Circular Recovery */}
       <div className="p-8 bg-[#111111] border-2 border-[#333333] flex flex-col md:flex-row items-start md:items-center justify-between gap-8">
